@@ -1,0 +1,1107 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.2.0
+  description: Gitbank API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: GitHub OAuth authentication
+  - name: vault
+    description: Personal vault operations
+  - name: projects
+    description: Project workspace operations
+  - name: transactions
+    description: Transaction history
+  - name: webhook
+    description: GitHub webhook receiver
+  - name: autogit
+    description: AutoGit scaffold sessions
+
+paths:
+  # ── Launched Tokens ─────────────────────────────────────────────────────────
+  /tokens:
+    get:
+      operationId: listLaunchedTokens
+      tags: [health]
+      summary: List all tokens launched via Gitbank (public)
+      responses:
+        "200":
+          description: List of launched tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LaunchedToken"
+
+  # ── Stats ───────────────────────────────────────────────────────────────────
+  /stats:
+    get:
+      operationId: getStats
+      tags: [health]
+      summary: Protocol stats (public)
+      responses:
+        "200":
+          description: Protocol statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProtocolStats"
+
+  # ── Health ──────────────────────────────────────────────────────────────────
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Clear session and log out
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ── Vault ────────────────────────────────────────────────────────────────────
+  /vault/balance:
+    get:
+      operationId: getVaultBalance
+      tags: [vault]
+      summary: Get gitToken balances for the authenticated user
+      responses:
+        "200":
+          description: Vault balances
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultBalance"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/deploy:
+    post:
+      operationId: deployVault
+      tags: [vault]
+      summary: Deploy a new GitVault for the authenticated user
+      responses:
+        "200":
+          description: Vault deployed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultDeployResult"
+        "400":
+          description: Vault already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/lock:
+    post:
+      operationId: lockTokens
+      tags: [vault]
+      summary: Lock ERC-20 tokens into the vault and mint gitTokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultLockInput"
+      responses:
+        "200":
+          description: Lock transaction submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/unlock:
+    post:
+      operationId: unlockTokens
+      tags: [vault]
+      summary: Burn gitTokens and release underlying ERC-20 to owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultUnlockInput"
+      responses:
+        "200":
+          description: Unlock transaction submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/swap:
+    post:
+      operationId: swapTokens
+      tags: [vault]
+      summary: Swap gitTokens via DEX (Aerodrome on mainnet, Uniswap v3 on Sepolia)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultSwapInput"
+      responses:
+        "200":
+          description: Swap transaction submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/transfer/init:
+    post:
+      operationId: initTransfer
+      tags: [vault]
+      summary: Step 1 of transfer commit-reveal scheme
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferInitInput"
+      responses:
+        "200":
+          description: Transfer initialized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferInitResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/transfer/finalize:
+    post:
+      operationId: finalizeTransfer
+      tags: [vault]
+      summary: Step 2 of transfer commit-reveal scheme
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferFinalizeInput"
+      responses:
+        "200":
+          description: Transfer executed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxResponse"
+        "400":
+          description: Invalid request or expired commit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/key:
+    get:
+      operationId: getVaultKey
+      tags: [vault]
+      summary: Export the decrypted execution private key for the authenticated user
+      responses:
+        "200":
+          description: Decrypted vault keypair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultKeyResult"
+        "400":
+          description: Vault not deployed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Projects ─────────────────────────────────────────────────────────────────
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects owned by or contributed to by the authenticated user
+      responses:
+        "200":
+          description: Project list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a new project workspace and lock budget in escrow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get project detail including tasks and budget status
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{projectId}/tasks:
+    post:
+      operationId: assignTask
+      tags: [projects]
+      summary: Assign a bounty to a contributor for a GitHub issue
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Task assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskRecord"
+        "400":
+          description: Invalid request or insufficient budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{projectId}/tasks/{taskId}:
+    delete:
+      operationId: reclaimTask
+      tags: [projects]
+      summary: Cancel a task and reclaim the escrowed bounty
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bounty reclaimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxResponse"
+        "404":
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Transactions ─────────────────────────────────────────────────────────────
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List transaction history for the authenticated user
+      parameters:
+        - name: projectId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: offset
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TransactionRecord"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Repos ─────────────────────────────────────────────────────────────────────
+  /repos:
+    get:
+      operationId: listRepos
+      summary: List connected GitHub repositories
+      tags: [repos]
+      security:
+        - session: []
+      responses:
+        "200":
+          description: List of repos across all user installations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConnectedRepo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /repos/{installationId}:
+    delete:
+      operationId: removeRepo
+      summary: Remove a GitHub App installation from Gitbank
+      tags: [repos]
+      security:
+        - session: []
+      parameters:
+        - name: installationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Installation removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid installationId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── AutoGit ──────────────────────────────────────────────────────────────────
+  /autogit/sessions:
+    get:
+      operationId: listScaffoldSessions
+      tags: [autogit]
+      summary: List scaffold sessions for the authenticated user
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScaffoldSession"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /autogit/sessions/{sessionId}:
+    get:
+      operationId: getScaffoldSession
+      tags: [autogit]
+      summary: Get a scaffold session with all generated files
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScaffoldSession"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /autogit/deploy:
+    post:
+      operationId: deployScaffold
+      tags: [autogit]
+      summary: Push scaffold files to a new GitHub repo and enable Pages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScaffoldDeployInput"
+      responses:
+        "200":
+          description: Deployed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScaffoldDeployResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Webhook ───────────────────────────────────────────────────────────────────
+  /webhooks/github:
+    post:
+      operationId: githubWebhook
+      tags: [webhook]
+      summary: Receive GitHub webhook events
+      parameters:
+        - name: X-GitHub-Event
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookPayload"
+      responses:
+        "200":
+          description: Event received and queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    # ── Common ────────────────────────────────────────────────────────────────
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    TxResponse:
+      type: object
+      required: [txHash, status]
+      properties:
+        txHash:
+          type: string
+        status:
+          type: string
+          enum: [pending, confirmed, failed]
+        blockNumber:
+          type: ["integer", "null"]
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    AuthUser:
+      type: object
+      required: [githubId, githubLogin, role]
+      properties:
+        githubId:
+          type: integer
+        githubLogin:
+          type: string
+        role:
+          type: string
+          enum: [member, manager]
+        vaultAddress:
+          type: ["string", "null"]
+        ownerAddress:
+          type: ["string", "null"]
+
+    # ── Vault ─────────────────────────────────────────────────────────────────
+    TokenBalance:
+      type: object
+      required: [token, symbol, gitToken, balance, usdValue]
+      properties:
+        token:
+          type: string
+        symbol:
+          type: string
+        gitToken:
+          type: string
+        balance:
+          type: string
+        usdValue:
+          type: string
+
+    VaultBalance:
+      type: object
+      required: [vaultAddress, balances, totalUsdValue]
+      properties:
+        vaultAddress:
+          type: string
+        balances:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenBalance"
+        totalUsdValue:
+          type: string
+
+    VaultDeployResult:
+      type: object
+      required: [vaultAddress, ownerAddress, txHash]
+      properties:
+        vaultAddress:
+          type: string
+        ownerAddress:
+          type: string
+        txHash:
+          type: string
+
+    VaultLockInput:
+      type: object
+      required: [token, amount]
+      properties:
+        token:
+          type: string
+        amount:
+          type: string
+
+    VaultUnlockInput:
+      type: object
+      required: [token, amount]
+      properties:
+        token:
+          type: string
+        amount:
+          type: string
+
+    VaultSwapInput:
+      type: object
+      required: [tokenIn, tokenOut, amountIn, slippageBps]
+      properties:
+        tokenIn:
+          type: string
+        tokenOut:
+          type: string
+        amountIn:
+          type: string
+        slippageBps:
+          type: integer
+
+    TransferInitInput:
+      type: object
+      required: [token, recipient, amount]
+      properties:
+        token:
+          type: string
+        recipient:
+          type: string
+        amount:
+          type: string
+
+    TransferInitResult:
+      type: object
+      required: [initHash, expiresAt]
+      properties:
+        initHash:
+          type: string
+        expiresAt:
+          type: string
+
+    TransferFinalizeInput:
+      type: object
+      required: [initHash]
+      properties:
+        initHash:
+          type: string
+
+    VaultKeyResult:
+      type: object
+      required: [ownerAddress, privateKey]
+      properties:
+        ownerAddress:
+          type: string
+        privateKey:
+          type: string
+
+    # ── Projects ──────────────────────────────────────────────────────────────
+    Project:
+      type: object
+      required: [id, onchainProjectId, name, repo, token, totalBudget, spentBudget, status, createdAt]
+      properties:
+        id:
+          type: integer
+        onchainProjectId:
+          type: integer
+        name:
+          type: string
+        repo:
+          type: string
+        token:
+          type: string
+        totalBudget:
+          type: string
+        spentBudget:
+          type: string
+        status:
+          type: string
+          enum: [active, completed, cancelled]
+        txHash:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ProjectInput:
+      type: object
+      required: [name, repo, token, totalBudget]
+      properties:
+        name:
+          type: string
+        repo:
+          type: string
+        token:
+          type: string
+        totalBudget:
+          type: string
+
+    TaskRecord:
+      type: object
+      required: [id, issueNumber, repo, contributorGithubId, bountyAmount, token, status, assignedAt]
+      properties:
+        id:
+          type: integer
+        issueNumber:
+          type: integer
+        repo:
+          type: string
+        contributorGithubId:
+          type: integer
+        contributorLogin:
+          type: ["string", "null"]
+        bountyAmount:
+          type: string
+        token:
+          type: string
+        status:
+          type: string
+          enum: [assigned, completed, cancelled]
+        prNumber:
+          type: ["integer", "null"]
+        assignTxHash:
+          type: ["string", "null"]
+        payoutTxHash:
+          type: ["string", "null"]
+        assignedAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+
+    TaskInput:
+      type: object
+      required: [issueNumber, repo, contributorGithubId, bountyAmount]
+      properties:
+        issueNumber:
+          type: integer
+        repo:
+          type: string
+        contributorGithubId:
+          type: integer
+        contributorLogin:
+          type: string
+        bountyAmount:
+          type: string
+
+    ProjectDetail:
+      type: object
+      required: [project, tasks]
+      properties:
+        project:
+          $ref: "#/components/schemas/Project"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskRecord"
+
+    # ── Transactions ──────────────────────────────────────────────────────────
+    TransactionRecord:
+      type: object
+      required: [id, type, githubId, status, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [lock, unlock, swap, transfer, bounty_assign, bounty_payout, bounty_reclaim, project_create]
+        githubId:
+          type: integer
+        tokenIn:
+          type: ["string", "null"]
+        tokenOut:
+          type: ["string", "null"]
+        amountIn:
+          type: ["string", "null"]
+        amountOut:
+          type: ["string", "null"]
+        feeAmount:
+          type: ["string", "null"]
+        txHash:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, confirmed, failed]
+        blockNumber:
+          type: ["integer", "null"]
+        projectDbId:
+          type: ["integer", "null"]
+        taskDbId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    # ── Repos ─────────────────────────────────────────────────────────────────
+    ConnectedRepo:
+      type: object
+      required: [installationId, accountLogin, repoId, fullName, private, htmlUrl]
+      properties:
+        installationId:
+          type: integer
+        accountLogin:
+          type: string
+        repoId:
+          type: integer
+        fullName:
+          type: string
+        private:
+          type: boolean
+        htmlUrl:
+          type: string
+
+    # ── Launched Tokens ───────────────────────────────────────────────────────
+    LaunchedToken:
+      type: object
+      required: [id, tokenName, tokenSymbol, contractAddress, deployerGithubLogin, chainId, launchedAt]
+      properties:
+        id:
+          type: integer
+        tokenName:
+          type: string
+        tokenSymbol:
+          type: string
+        contractAddress:
+          type: string
+        deployerGithubLogin:
+          type: string
+        deployerGithubId:
+          type: integer
+        txHash:
+          type: ["string", "null"]
+        chainId:
+          type: integer
+        websiteUrl:
+          type: ["string", "null"]
+        twitterUrl:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        marketCapUsd:
+          type: number
+        githubCommentUrl:
+          type: ["string", "null"]
+        launchedAt:
+          type: string
+
+    # ── Stats ─────────────────────────────────────────────────────────────────
+    ProtocolStats:
+      type: object
+      required: [vaultsDeployed, commandsProcessed, txOnChain, reposConnected]
+      properties:
+        vaultsDeployed:
+          type: integer
+        commandsProcessed:
+          type: integer
+        txOnChain:
+          type: integer
+        reposConnected:
+          type: integer
+
+    # ── AutoGit ───────────────────────────────────────────────────────────────
+    ScaffoldFile:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+
+    ScaffoldSession:
+      type: object
+      required: [id, prompt, status, files, createdAt]
+      properties:
+        id:
+          type: string
+        prompt:
+          type: string
+        status:
+          type: string
+          enum: [generating, ready, deployed]
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScaffoldFile"
+        repoUrl:
+          type: ["string", "null"]
+        pagesUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ScaffoldDeployInput:
+      type: object
+      required: [sessionId, repoName]
+      properties:
+        sessionId:
+          type: string
+        repoName:
+          type: string
+        enablePages:
+          type: boolean
+
+    ScaffoldDeployResult:
+      type: object
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          type: string
+        pagesUrl:
+          type: ["string", "null"]
+
+    # ── Webhook ───────────────────────────────────────────────────────────────
+    WebhookPayload:
+      type: object
+      description: Raw GitHub webhook payload (any shape)
+      additionalProperties: true
