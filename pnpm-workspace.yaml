@@ -1,0 +1,5 @@
+packages:
+  - api-server
+  - db
+  - api-spec
+  - api-zod
