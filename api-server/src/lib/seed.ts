@@ -1,0 +1,361 @@
+/**
+ * One-time backfill seed for launched_tokens table.
+ * Runs at server startup — fully idempotent via ON CONFLICT DO NOTHING.
+ * Historical tokens launched via GitHub Discussion #4 before DB existed.
+ */
+
+import { db } from "@workspace/db";
+import { launchedTokensTable } from "@workspace/db/schema";
+import { sql } from "drizzle-orm";
+import { logger } from "./logger";
+
+const BASE = "https://github.com/gitbankio/playground/discussions/4#discussioncomment-";
+const GH = (id: string) => `${BASE}${id}`;
+const GHA = (uuid: string) => `https://github.com/user-attachments/assets/${uuid}`;
+
+const SEED_TOKENS = [
+  {
+    tokenName: "Test Token",
+    tokenSymbol: "TEST",
+    contractAddress: "0x53e203D60F8F39790C184fC5812b1c5741BB6C71",
+    deployerGithubLogin: "imrenone",
+    deployerGithubId: 0,
+    txHash: "0x518396c8e98dd0afac93a8f399b58ef78d5a62b2f14be729ac21a1a27308c33a",
+    chainId: 8453,
+    websiteUrl: "https://gitbank.io",
+    twitterUrl: "https://x.com/gitbank",
+    imageUrl: null,
+    githubCommentUrl: GH("17008442"),
+    launchedAt: new Date("2026-05-21T23:00:00Z"),
+  },
+  {
+    tokenName: "gitbank x clanker",
+    tokenSymbol: "GITBANKR",
+    contractAddress: "0xAbDEc029105e145C613AB2aAB49D8a74ce1d9AB7",
+    deployerGithubLogin: "fcfsprojects",
+    deployerGithubId: 0,
+    txHash: "0x07f8e8745cb12ac560eb2b001287b5eeae14bf1adf8974c6ba8b03d448f7c01d",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: null,
+    githubCommentUrl: GH("17008913"),
+    launchedAt: new Date("2026-05-21T23:09:00Z"),
+  },
+  {
+    tokenName: "gitbank x clanker",
+    tokenSymbol: "GITBANKR",
+    contractAddress: "0x8d9306DD625C7462b140E07310b793C21C90dc55",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0xf8cf9b7a7696e2d53b9f0a19da186c20009f2731e182632e86e62ccab970e91a",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: null,
+    githubCommentUrl: GH("17008997"),
+    launchedAt: new Date("2026-05-21T23:09:30Z"),
+  },
+  {
+    tokenName: "gitbank",
+    tokenSymbol: "GITBANK",
+    contractAddress: "0x300e8f33FDDA7E7AbbB04EED3D46c642346e23F4",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0xc210c75a3e8dbe5351046238130206368b8f3f0f4dfcfa987068570fbe3b5a5f",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: null,
+    githubCommentUrl: GH("17009012"),
+    launchedAt: new Date("2026-05-21T23:10:00Z"),
+  },
+  {
+    tokenName: "gitbank",
+    tokenSymbol: "GITBANK",
+    contractAddress: "0x014fbE31A110414e25e5474d1c74601a23153682",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0xb16dccf64dd4d2968b35ecbea3bd5c228637b2d2612641a28de29b8f1ed057e1",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: null,
+    githubCommentUrl: GH("17009048"),
+    launchedAt: new Date("2026-05-21T23:10:30Z"),
+  },
+  {
+    tokenName: "gitbankbot",
+    tokenSymbol: "GITBANKBOT",
+    contractAddress: "0xA56C870285f49175e3e49B613Df6b05d38d0Bc1D",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0x08d78e775fca475cdc3f3d5f76b904a8da61e17038d0cbded6ee6f4e577b2f74",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: null,
+    githubCommentUrl: GH("17009069"),
+    launchedAt: new Date("2026-05-21T23:11:00Z"),
+  },
+  {
+    tokenName: "gitbankbot",
+    tokenSymbol: "GITBANKBOT",
+    contractAddress: "0xCE9334c26b642Cf30a54610Ef29ecFF3b2DD4Ea8",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0x477e22628e72dc662e5c8b9380f012c5ff6ff521c8c185e0b05be53a4ce4a101",
+    chainId: 8453,
+    websiteUrl: "https://github.com/apps/gitbankbot",
+    twitterUrl: null,
+    imageUrl: null,
+    githubCommentUrl: GH("17009090"),
+    launchedAt: new Date("2026-05-21T23:11:30Z"),
+  },
+  {
+    tokenName: "Gitbank x Clanker",
+    tokenSymbol: "GXC",
+    contractAddress: "0x6B615DBdbdb00E7B8B11d875D5e1102ac575b370",
+    deployerGithubLogin: "clawthedoor",
+    deployerGithubId: 0,
+    txHash: "0xf78e86dac17c54c5000cab5bb416ed83e278ce912d45e1f133158e2f934cdda1",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: null,
+    imageUrl: null,
+    githubCommentUrl: GH("17009118"),
+    launchedAt: new Date("2026-05-21T23:15:00Z"),
+  },
+  {
+    tokenName: "gitbank",
+    tokenSymbol: "GITCLANK",
+    contractAddress: "0xeC69f1Cb95791E5648430FAeED9964be9623ed8C",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0xafb6a6159cef6f9115f6359eed9d54a5737991d76560d83e952b2d96e995c3d5",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: null,
+    githubCommentUrl: GH("17009128"),
+    launchedAt: new Date("2026-05-21T23:15:30Z"),
+  },
+  {
+    tokenName: "gitbank edu",
+    tokenSymbol: "GITBANKDU",
+    contractAddress: "0x59509f4051Dac414343b6Fd153911cafe1ab7069",
+    deployerGithubLogin: "fcfsprojects",
+    deployerGithubId: 0,
+    txHash: "0xeef974eb10f3037b00d4f9b40b49fca942345c7191d89a1d85e0c0481e80cfb1",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057442529574879540",
+    imageUrl: null,
+    githubCommentUrl: GH("17009135"),
+    launchedAt: new Date("2026-05-21T23:17:00Z"),
+  },
+  {
+    tokenName: "gitbank",
+    tokenSymbol: "GITBANK",
+    contractAddress: "0x52A53217F09e4EFA67BDD1ec77589ed176Bf915B",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0x52c08120d49b26c121fe2eef40fc4038026e398eb05b5447690525165e1f071d",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: GHA("010fe689-a177-4eea-8090-bcd3d707e2a9"),
+    githubCommentUrl: GH("17009176"),
+    launchedAt: new Date("2026-05-21T23:21:00Z"),
+  },
+  {
+    tokenName: "gitbank x clanker",
+    tokenSymbol: "GITBANKR",
+    contractAddress: "0xBc0F5F5021c616381E0847c0B9Bddc37dfFB9209",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0xc6132a3fc7b82c80058ab035624fbfa8b4cd358f3eb9bb396be8b9571630a486",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: GHA("e3b76206-cdf4-4f0b-926b-ebc286d769cf"),
+    githubCommentUrl: GH("17009193"),
+    launchedAt: new Date("2026-05-21T23:22:00Z"),
+  },
+  {
+    tokenName: "Test Token",
+    tokenSymbol: "TEST",
+    contractAddress: "0xa78a7C94a25Bb9a364EA6D0fB9e2fabf90aCe2Ed",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0xc42995f3f425328a325cdfce5cc1de000cb9ec464c000b0d4b2d33e9b2b39762",
+    chainId: 8453,
+    websiteUrl: "https://gitbank.io/",
+    twitterUrl: "https://x.com/gitbank",
+    imageUrl: null,
+    githubCommentUrl: GH("17009277"),
+    launchedAt: new Date("2026-05-21T23:29:00Z"),
+  },
+  {
+    tokenName: "autogit",
+    tokenSymbol: "AUTOGIT",
+    contractAddress: "0xC9AF202CeAB77080E953f289e6c7CBff9569B344",
+    deployerGithubLogin: "fcfsprojects",
+    deployerGithubId: 0,
+    txHash: "0x254879770cd7ee8e2076a55ac1bd36b6c3ef7d8aa7906a0fc4f1e776205607f9",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057370816640069963",
+    imageUrl: null,
+    githubCommentUrl: GH("17009326"),
+    launchedAt: new Date("2026-05-21T23:34:00Z"),
+  },
+  {
+    tokenName: "gitbankbot",
+    tokenSymbol: "BOT",
+    contractAddress: "0x4ffd0E30Fec879A405A1043e55652B433b3A7920",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0xa7962f932f8a8fc75da48eada570830da40f1203471192a0cd9cfd40c31ac489",
+    chainId: 8453,
+    websiteUrl: "https://github.com/apps/gitbankbot",
+    twitterUrl: "https://x.com/Gitbank_io/status/2057529327802318979",
+    imageUrl: null,
+    githubCommentUrl: GH("17009352"),
+    launchedAt: new Date("2026-05-21T23:37:00Z"),
+  },
+  {
+    tokenName: "gitcat",
+    tokenSymbol: "GITCAT",
+    contractAddress: "0x4159d4F88A6076d3079BC93A6C3befFB0495AD3F",
+    deployerGithubLogin: "lupitmoxie",
+    deployerGithubId: 0,
+    txHash: "0x6dd1a8c753026151b93ea4b483d1f0e84eabbd5ac14b7a15503c085bad0d0a30",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: null,
+    imageUrl: GHA("75580df1-9b5d-4c8a-8c2c-3edcb454abe1"),
+    githubCommentUrl: GH("17009506"),
+    launchedAt: new Date("2026-05-21T23:49:00Z"),
+  },
+  {
+    tokenName: "gitswap",
+    tokenSymbol: "GITSWAP",
+    contractAddress: "0x842C75ef06c2906B8f2c51072a1B65FA68d30974",
+    deployerGithubLogin: "lupitmoxie",
+    deployerGithubId: 0,
+    txHash: "0x58c41ef96d32ae9c32ab2d378538daf06fb79ad780bb734a541d81da8d2e4364",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057295314264973517",
+    imageUrl: null,
+    githubCommentUrl: GH("17009568"),
+    launchedAt: new Date("2026-05-21T23:58:00Z"),
+  },
+  {
+    tokenName: "gitbank playground",
+    tokenSymbol: "PLAYGROUND",
+    contractAddress: "0x18b52E03B2942b0E55611a756174Cf1cba92aC29",
+    deployerGithubLogin: "fcfsprojects",
+    deployerGithubId: 0,
+    txHash: "0x1fcaba19d22807a3600d010b442daf747806b6f2aa84277f953c233674515883",
+    chainId: 8453,
+    websiteUrl: "https://github.com/gitbankio/playground/discussions/4",
+    twitterUrl: "https://x.com/Gitbank_io/status/2057183177526186461",
+    imageUrl: null,
+    githubCommentUrl: GH("17009625"),
+    launchedAt: new Date("2026-05-22T00:04:00Z"),
+  },
+  {
+    tokenName: "Test Token",
+    tokenSymbol: "TEST",
+    contractAddress: "0xEe9865b347C23c0538749cE989D805439ff0AF9C",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0x8b2a0e817fbca1fb2659339f9f796f3b305c4e6ee646b11430a263aebeca9332",
+    chainId: 8453,
+    websiteUrl: "https://gitbank.io",
+    twitterUrl: "https://x.com/gitbank",
+    imageUrl: null,
+    githubCommentUrl: GH("17009670"),
+    launchedAt: new Date("2026-05-22T00:09:00Z"),
+  },
+  {
+    tokenName: "gitbank vault",
+    tokenSymbol: "GITVAULT",
+    contractAddress: "0x4dF935963B768aa71B1bC999a48097625611061a",
+    deployerGithubLogin: "fcfsprojects",
+    deployerGithubId: 0,
+    txHash: "0xa7122373ff23e79403034dd1f5bc283e60d5a70ad2ea4bc6aa852f0d8d8567de",
+    chainId: 8453,
+    websiteUrl: null,
+    twitterUrl: "https://x.com/Gitbank_io/status/2057500946481975400",
+    imageUrl: null,
+    githubCommentUrl: GH("17009679"),
+    launchedAt: new Date("2026-05-22T00:09:14Z"),
+  },
+  {
+    tokenName: "Zen Browser",
+    tokenSymbol: "ZB",
+    contractAddress: "0xcA2CA415cFd240Be1688f30A6225e4ACa8Ad79F8",
+    deployerGithubLogin: "Dexxcuyy",
+    deployerGithubId: 0,
+    txHash: "0x9983c038fe3aa6d260608600c09718ca4afaa6e7e2ba117d61b80d1764dc2887",
+    chainId: 8453,
+    websiteUrl: "https://zen-browser.app",
+    twitterUrl: "https://x.com/zen_browser",
+    imageUrl: null,
+    githubCommentUrl: GH("17009687"),
+    launchedAt: new Date("2026-05-22T00:10:00Z"),
+  },
+  {
+    tokenName: "T3 Code",
+    tokenSymbol: "T3",
+    contractAddress: "0x88edd4D0f02631701E3977cF2dBDd0AfB326fB07",
+    deployerGithubLogin: "t3codes",
+    deployerGithubId: 0,
+    txHash: "0x2c338e479924182e7101c80ea83cd2d1fe4c1d7183443b40d4137d19a2b5e6a5",
+    chainId: 8453,
+    websiteUrl: "https://t3.codes/",
+    twitterUrl: "https://x.com/t3dotcodes",
+    imageUrl: "https://turquoise-blank-swallow-685.mypinata.cloud/ipfs/bafkreidijt72lhiu5kztq64lbgwifps3mcgku4xvzfemlfpaetgy3gnwvi",
+    githubCommentUrl: null,
+    launchedAt: new Date("2026-05-21T20:37:35Z"),
+  },
+] as const;
+
+const GENERIC_IMG_PATTERNS = ["bafkreiachcq", "QmU3mSUBehH7iiS3qacbKmdYcNFT7qZt2E6kbo2"];
+
+export async function seedLaunchedTokens(): Promise<void> {
+  try {
+    await db
+      .insert(launchedTokensTable)
+      .values(SEED_TOKENS.map((t) => ({ ...t })))
+      .onConflictDoUpdate({
+        target: launchedTokensTable.contractAddress,
+        // On conflict: backfill githubCommentUrl if missing, set real imageUrl if
+        // current value is null or a known generic bot image. Never overwrite
+        // real GitHub user-attachment images.
+        set: {
+          githubCommentUrl: sql`CASE
+            WHEN launched_tokens.github_comment_url IS NULL
+            THEN EXCLUDED.github_comment_url
+            ELSE launched_tokens.github_comment_url
+          END`,
+          imageUrl: sql`CASE
+            WHEN EXCLUDED.image_url IS NOT NULL
+              AND (
+                launched_tokens.image_url IS NULL
+                OR launched_tokens.image_url LIKE ${"%" + GENERIC_IMG_PATTERNS[0] + "%"}
+                OR launched_tokens.image_url LIKE ${"%" + GENERIC_IMG_PATTERNS[1] + "%"}
+              )
+            THEN EXCLUDED.image_url
+            ELSE launched_tokens.image_url
+          END`,
+        },
+      });
+    logger.info({ count: SEED_TOKENS.length }, "Launched tokens seed complete");
+  } catch (err) {
+    logger.warn({ err }, "Launched tokens seed failed (non-fatal)");
+  }
+}
