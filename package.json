@@ -1,0 +1,9 @@
+{
+  "name": "gitbank-server",
+  "private": true,
+  "packageManager": "pnpm@10.10.0",
+  "scripts": {
+    "typecheck": "pnpm --filter @workspace/api-server run typecheck && pnpm --filter @workspace/db run typecheck && pnpm --filter @workspace/api-spec run typecheck",
+    "dev": "pnpm --filter @workspace/api-server run dev"
+  }
+}
